@@ -40,10 +40,17 @@ const userSocketMap = {};
 
         // 🔁 Send ALL previous messages sent *to* the user
     try {
-      const messages = await Message.find({ receiver: userId })
+      const messages = await Message.find({ 
+        // receiver: userId 
+          $or: [
+        { receiver: userId },  // Messages received by this user
+        { sender: userId }     // Messages sent by this user
+        ]
+      })
         .sort({ createdAt: -1 })
         .populate("sender", "name email")
-        .populate("receiver", "name email");
+        .populate("receiver", "name email")
+        .limit(100);
 
       socket.emit("initialMessages", messages);
       // io.to(receiverId).emit("receiveMessage", populatedMsg);
