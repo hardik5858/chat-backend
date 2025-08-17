@@ -48,8 +48,8 @@ const userSocketMap = {};
         ]
       })
         .sort({ createdAt: -1 })
-        .populate("sender", "name email")
-        .populate("receiver", "name email")
+        .populate("sender", "username email")
+        .populate("receiver", "username email")
         .limit(100);
 
       socket.emit("initialMessages", messages);
@@ -80,8 +80,8 @@ const userSocketMap = {};
         // console.log(`📨 Delivered to receiver (${receiverId})`);
 
            const populatedMsg = await Message.findById(savedMessage._id)
-        .populate("sender", "name email")
-        .populate("receiver", "name email");
+        .populate("sender", "username email")
+        .populate("receiver", "username email");
         
    // Send to receiver’s socket directly
     if (userSocketMap[receiverId]) {
@@ -94,12 +94,12 @@ const userSocketMap = {};
       console.log(`📨 Delivered to receiver (${receiverId})`);
 
         // 3. Emit real-time chat preview update to receiver
-        const senderUser = await User.findById(senderId).select("name email");
+        const senderUser = await User.findById(senderId).select("username email");
 
         io.to(receiverId).emit("chatListUpdate",{
           user: {
             _id: senderUser._id,
-            name: senderUser.name,
+            name: senderUser.username,
             email: senderUser.email,
           },
           lastMessage: content,
