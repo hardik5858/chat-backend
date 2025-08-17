@@ -9,6 +9,7 @@ const { Server } = require("socket.io");
 const authRoutes = require("./routes/auth");
 const protectedRoute = require("./routes/protectedRoute");
 const messageRoute=require("./routes/messageRoute");
+const userRoute = require("./routes/userRoutes");
 const socketHandler=require("./socket/socket");
 // const connectDB = require("./db");
 
@@ -56,6 +57,7 @@ connectDB();
 app.use("/api/user",authRoutes);
 app.use("/api/protected", protectedRoute);
 app.use("/api/message",messageRoute);
+app.use("/api/users",userRoute)
 
 // Routes
 app.get("/", (req, res) => {
