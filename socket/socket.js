@@ -6,7 +6,7 @@ const admin = require('firebase-admin');
 
 // Initialize Firebase Admin SDK (add this at the top)
 // Make sure you have your service account key file
-const serviceAccount = require('../config/chat-notification-node-firebase-adminsdk-fbsvc-b947f26d37.json'); // Update path as needed
+// const serviceAccount = require('../config/chat-notification-node-firebase-adminsdk-fbsvc-b947f26d37.json'); // Update path as needed
 admin.initializeApp({
   credential: admin.credential.cert(
       {
