@@ -2,6 +2,21 @@ const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const Message = require("../models/message");
 const User = require("../models/user");
+const admin = require('firebase-admin');
+
+// Initialize Firebase Admin SDK (add this at the top)
+// Make sure you have your service account key file
+const serviceAccount = require('../config/chat-notification-node-firebase-adminsdk-fbsvc-b947f26d37.json'); // Update path as needed
+admin.initializeApp({
+  credential: admin.credential.cert(
+      {
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n'),
+      }
+    // serviceAccount
+  )
+});
 
 module.exports = (server) => {
   const io = new Server(server, {
@@ -28,7 +43,10 @@ module.exports = (server) => {
         return next(new Error("Authontication failed"));
     }
   })  
-const userSocketMap = {};
+
+ const userSocketMap = {}; // Maps userId to socketId
+ const userFCMTokens = {}; // Maps userId to FCM token - ADD THIS
+
   io.on("connection", async(socket) => {
     const userId = socket.user.id;
   userSocketMap[userId] = socket.id;
@@ -37,6 +55,18 @@ const userSocketMap = {};
     // User joins their private room
     socket.join(userId); // Join user's private room
     console.log(`✅ User ${userId} joined their private room`);
+
+      // ADD: Handle FCM token registration
+    socket.on("updateFCMToken", (data) => {
+      const { fcmToken } = data;
+      if (fcmToken) {
+        userFCMTokens[userId] = fcmToken;
+        console.log(`📱 FCM token updated for user ${userId}`);
+        
+        // Optional: Save to database for persistence
+        // User.findByIdAndUpdate(userId, { fcmToken }).catch(console.error);
+      }
+    });
 
         // 🔁 Send ALL previous messages sent *to* the user
     try {
@@ -82,11 +112,24 @@ const userSocketMap = {};
            const populatedMsg = await Message.findById(savedMessage._id)
         .populate("sender", "username email")
         .populate("receiver", "username email");
+
+        // Check if receiver is online
+        const isReceiverOnline = userSocketMap[receiverId];
+
+         if (isReceiverOnline) {
+          // Receiver is online - send via socket
+          io.to(userSocketMap[receiverId]).emit("receiveMessage", populatedMsg);
+          console.log(`📨 Delivered to online receiver (${receiverId})`);
+        } else {
+          // Receiver is offline - send push notification
+          console.log(`📱 Receiver ${receiverId} is offline, sending push notification`);
+          await sendPushNotification(receiverId, content, populatedMsg.sender.username);
+        }
         
-   // Send to receiver’s socket directly
-    if (userSocketMap[receiverId]) {
-      io.to(userSocketMap[receiverId]).emit("receiveMessage", populatedMsg);
-    }
+  //  // Send to receiver’s socket directly
+  //   if (userSocketMap[receiverId]) {
+  //     io.to(userSocketMap[receiverId]).emit("receiveMessage", populatedMsg);
+  //   }
                 // Send message to receiver
           // Send to receiver and echo to sender 
       io.to(receiverId).emit("receiveMessage", populatedMsg);
@@ -117,6 +160,67 @@ const userSocketMap = {};
     // Handle disconnect
     socket.on("disconnect", () => {
       console.log("🔌 Client disconnected:", socket.id);
+      // Remove user from online users map
+      delete userSocketMap[userId];
     });
   });
+
+   // ADD: Function to send push notifications
+  async function sendPushNotification(receiverId, message, senderName) {
+    try {
+      const fcmToken = userFCMTokens[receiverId];
+      
+      if (!fcmToken) {
+        console.log(`❌ No FCM token found for user ${receiverId}`);
+        return;
+      }
+
+      const payload = {
+        notification: {
+          title: senderName || 'New Message',
+          body: message.length > 100 ? message.substring(0, 97) + '...' : message,
+          sound: 'default',
+        },
+        data: {
+          senderId: receiverId.toString(),
+          type: 'chat_message',
+          click_action: 'FLUTTER_NOTIFICATION_CLICK',
+        },
+        android: {
+          notification: {
+            channelId: 'chat_messages',
+            priority: 'high',
+            defaultSound: true,
+            icon: 'ic_launcher', // Make sure you have this icon
+          },
+        },
+        apns: {
+          payload: {
+            aps: {
+              sound: 'default',
+              badge: 1,
+              alert: {
+                title: senderName || 'New Message',
+                body: message.length > 100 ? message.substring(0, 97) + '...' : message,
+              },
+            },
+          },
+        },
+        token: fcmToken,
+      };
+
+      const response = await admin.messaging().send(payload);
+      console.log('✅ Push notification sent successfully:', response);
+      
+    } catch (error) {
+      console.error('❌ Error sending push notification:', error);
+      
+      // If token is invalid, remove it
+      if (error.code === 'messaging/registration-token-not-registered' || 
+          error.code === 'messaging/invalid-registration-token') {
+        delete userFCMTokens[receiverId];
+        console.log(`🗑️ Removed invalid FCM token for user ${receiverId}`);
+      }
+    }
+  }
 };
