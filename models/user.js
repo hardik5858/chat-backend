@@ -17,7 +17,8 @@ const userScheam=mongoose.Schema({
         type:String,
         required:true,
         min:6
-    }
+    },
+    fcmToken: String,
 },{
     timestamps:true
 });

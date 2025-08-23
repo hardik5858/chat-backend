@@ -63,8 +63,8 @@ module.exports = (server) => {
         userFCMTokens[userId] = fcmToken;
         console.log(`📱 FCM token updated for user ${userId}`);
         
-        // Optional: Save to database for persistence
-        // User.findByIdAndUpdate(userId, { fcmToken }).catch(console.error);
+        // Save to database for persistence
+        User.findByIdAndUpdate(userId, { fcmToken }).catch(console.error);
       }
     });
 
@@ -168,26 +168,39 @@ module.exports = (server) => {
    // ADD: Function to send push notifications
   async function sendPushNotification(receiverId, message, senderName, messageId) {
     try {
-      const fcmToken = userFCMTokens[receiverId];
+      let fcmToken = userFCMTokens[receiverId];
+
+       if (!fcmToken) {
+        // Try to get from database
+        const user = await User.findById(receiverId).select('fcmToken');
+        if (user && user.fcmToken) {
+          fcmToken = user.fcmToken;
+          userFCMTokens[receiverId] = fcmToken; // Cache it
+        }
+      }
       
       if (!fcmToken) {
         console.log(`❌ No FCM token found for user ${receiverId}`);
         return;
       }
 
+      // CRITICAL: Proper payload structure for terminated apps
       const payload = {
+        // notification payload is REQUIRED for terminated apps
         notification: {
           title: senderName || 'New Message',
           body: message.length > 100 ? message.substring(0, 97) + '...' : message,
-          sound: 'default',
         },
+        // data payload for app navigation
         data: {
-           chatId: receiverId.toString(), // This should match what your app expects
+          chatId: receiverId.toString(), // This should match what your app expects
           senderId: receiverId.toString(), // Fixed: was using receiverId, should be senderId
           messageId: messageId ? messageId.toString() : '',
           type: 'chat_message',
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
+          // Add any other data your app needs
         },
+        // Android specific settings
         android: {
           notification: {
             channelId: 'chat_messages',
@@ -198,10 +211,11 @@ module.exports = (server) => {
             color: '#FF6B6B', // Optional: notification accent color
             clickAction: 'FLUTTER_NOTIFICATION_CLICK',
           },
-                   // Set high priority for immediate delivery
+          // Set high priority for immediate delivery
           priority: 'high',
           ttl: 3600000, // 1 hour TTL
         },
+        // iOS specific settings
         apns: {
           headers: {
             'apns-priority': '10', // High priority
@@ -209,18 +223,16 @@ module.exports = (server) => {
           },
           payload: {
             aps: {
-              sound: 'default',
-              badge: 1,
               alert: {
                 title: senderName || 'New Message',
                 body: message.length > 100 ? message.substring(0, 97) + '...' : message,
               },
-               sound: 'default',
+              sound: 'default',
               badge: 1,
               'mutable-content': 1, // For rich notifications
               category: 'CHAT_MESSAGE',
             },
-             // Custom data for iOS
+            // Custom data for iOS
             chatId: receiverId.toString(),
             senderId: receiverId.toString(),
             type: 'chat_message',
@@ -240,6 +252,7 @@ module.exports = (server) => {
       if (error.code === 'messaging/registration-token-not-registered' || 
           error.code === 'messaging/invalid-registration-token') {
         delete userFCMTokens[receiverId];
+        User.findByIdAndUpdate(receiverId, { $unset: { fcmToken: 1 } }).catch(console.error);
         console.log(`🗑️ Removed invalid FCM token for user ${receiverId}`);
       }
     }
