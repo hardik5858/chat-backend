@@ -3,6 +3,9 @@ const jwt = require("jsonwebtoken");
 const Message = require("../models/message");
 const User = require("../models/user");
 const admin = require('firebase-admin');
+const dotenv = require("dotenv");
+
+dotenv.config();
 
 // Initialize Firebase Admin SDK (add this at the top)
 // Make sure you have your service account key file
@@ -17,6 +20,15 @@ admin.initializeApp({
     // serviceAccount
   )
 });
+
+// Add this debug log to verify credentials work
+admin.credential.cert({
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+}).getAccessToken()
+  .then(() => console.log('✅ Firebase Admin credentials are valid'))
+  .catch((error) => console.error('❌ Firebase Admin credentials invalid:', error.message));
 
 module.exports = (server) => {
   const io = new Server(server, {
