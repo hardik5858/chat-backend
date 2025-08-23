@@ -48,7 +48,7 @@ module.exports = (server) => {
  const userFCMTokens = {}; // Maps userId to FCM token - ADD THIS
 
   io.on("connection", async(socket) => {
-    const userId = socket.user.id;
+  const userId = socket.user.id;
   userSocketMap[userId] = socket.id;
   console.log(`✅ ${userId} -> ${socket.id}`);
 
@@ -123,7 +123,7 @@ module.exports = (server) => {
         } else {
           // Receiver is offline - send push notification
           console.log(`📱 Receiver ${receiverId} is offline, sending push notification`);
-          await sendPushNotification(receiverId, content, populatedMsg.sender.username);
+          await sendPushNotification(receiverId, content, populatedMsg.sender.username,savedMessage._id);
         }
         
   //  // Send to receiver’s socket directly
@@ -166,7 +166,7 @@ module.exports = (server) => {
   });
 
    // ADD: Function to send push notifications
-  async function sendPushNotification(receiverId, message, senderName) {
+  async function sendPushNotification(receiverId, message, senderName, messageId) {
     try {
       const fcmToken = userFCMTokens[receiverId];
       
@@ -182,7 +182,9 @@ module.exports = (server) => {
           sound: 'default',
         },
         data: {
-          senderId: receiverId.toString(),
+           chatId: receiverId.toString(), // This should match what your app expects
+          senderId: receiverId.toString(), // Fixed: was using receiverId, should be senderId
+          messageId: messageId ? messageId.toString() : '',
           type: 'chat_message',
           click_action: 'FLUTTER_NOTIFICATION_CLICK',
         },
@@ -191,10 +193,20 @@ module.exports = (server) => {
             channelId: 'chat_messages',
             priority: 'high',
             defaultSound: true,
-            icon: 'ic_launcher', // Make sure you have this icon
+            defaultVibrateTimings: true,
+            icon: 'ic_launcher',
+            color: '#FF6B6B', // Optional: notification accent color
+            clickAction: 'FLUTTER_NOTIFICATION_CLICK',
           },
+                   // Set high priority for immediate delivery
+          priority: 'high',
+          ttl: 3600000, // 1 hour TTL
         },
         apns: {
+          headers: {
+            'apns-priority': '10', // High priority
+            'apns-push-type': 'alert',
+          },
           payload: {
             aps: {
               sound: 'default',
@@ -203,12 +215,21 @@ module.exports = (server) => {
                 title: senderName || 'New Message',
                 body: message.length > 100 ? message.substring(0, 97) + '...' : message,
               },
+               sound: 'default',
+              badge: 1,
+              'mutable-content': 1, // For rich notifications
+              category: 'CHAT_MESSAGE',
             },
+             // Custom data for iOS
+            chatId: receiverId.toString(),
+            senderId: receiverId.toString(),
+            type: 'chat_message',
           },
         },
         token: fcmToken,
       };
 
+     console.log(`🔔 Sending push notification to token: ${fcmToken.substring(0, 20)}...`);
       const response = await admin.messaging().send(payload);
       console.log('✅ Push notification sent successfully:', response);
       
