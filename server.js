@@ -13,6 +13,10 @@ const userRoute = require("./routes/userRoutes");
 const socketHandler=require("./socket/socket");
 // const connectDB = require("./db");
 
+
+const Message = require("./models/message"); // adjust path if needed
+
+
 // Load .env variables
 dotenv.config();
 console.log('🚀 Server is starting...');
@@ -38,6 +42,30 @@ app.use(cors({
   credentials: true
 }));
 app.use(express.json()); // ✅ FIXED this line
+async function migrateOldMessages() {
+  try {
+    const result = await Message.updateMany(
+      { 
+        $or: [
+          { isDelivered: { $exists: false } },
+          { isRead: { $exists: false } }
+        ]
+      },
+      { 
+        $set: { 
+          isDelivered: true,  // Assume old messages were delivered
+          isRead: true        // Assume old messages were read
+        } 
+      }
+    );
+
+    console.log(`✅ Updated ${result.modifiedCount} old messages`);
+  } catch (error) {
+    console.error("Migration failed:", error);
+  } finally {
+    mongoose.connection.close();
+  }
+}
 
 // MongoDB connection
 const connectDB = async () => {
@@ -46,6 +74,7 @@ const connectDB = async () => {
         await mongoose.connect(process.env.MONGO_URL, {
             serverSelectionTimeoutMS: 5000 // Try setting this to a higher value like 10000
         });
+            // await migrateOldMessages(); // run once
         console.log(`Connected to MongoDB at ${mongoose.connection.host}`);
     } catch (error) {
         console.error('Database connection error:', error); // Log only the error message

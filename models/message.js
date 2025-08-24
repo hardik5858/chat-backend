@@ -19,6 +19,8 @@ const messageSchema= new mongoose.Schema({
     //     type:Date,
     //     default:Date.now
     // }
+    isDelivered: { type: Boolean, default: false },
+    isRead: { type: Boolean, default: false }
 }, {
     timestamps: true, // ✅ adds createdAt and updatedAt automatically
   });
