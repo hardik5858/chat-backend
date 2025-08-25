@@ -1,1 +1,1 @@
-This is Project make for make chat application and chat application learning and develop Feture realtime message get and realtime update and real time notification show to user search user to other user 
+This Node.js backend provides multiple APIs including user login and registration, real-time communication using Socket.IO, and search functionality. It supports real-time data exchange between users and is designed to handle authentication, messaging, and user management efficiently.
