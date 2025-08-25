@@ -1,0 +1,1 @@
+This is Project make for make chat application and chat application learning and develop Feture realtime message get and realtime update and real time notification show to user search user to other user 
